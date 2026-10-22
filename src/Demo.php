@@ -13,10 +13,9 @@ use FriendsOfRedaxo\Fluid\Search\Search;
 use FriendsOfRedaxo\Fluid\Settings;
 use Redaxo\Core\Content\Article;
 use Redaxo\Core\Content\ArticleCache;
-use Redaxo\Core\Content\ArticleContent;
 use Redaxo\Core\Content\ArticleRevision;
+use Redaxo\Core\Content\ExtensionPoint\ArticleContentRendering;
 use Redaxo\Core\Content\ExtensionPoint\ArticleContentUpdated;
-use Redaxo\Core\Content\Module;
 use Redaxo\Core\Core;
 use Redaxo\Core\Database\Sql;
 use Redaxo\Core\ExtensionPoint\Extension;
@@ -25,7 +24,6 @@ use Redaxo\Core\ExtensionPoint\ExtensionPoint;
 use Redaxo\Core\Http\Request;
 use Redaxo\Core\Security\BackendLogin;
 use Redaxo\Core\Security\User;
-use Redaxo\Core\Util\Type;
 use Throwable;
 
 use function in_array;
@@ -193,7 +191,7 @@ final class Demo
 
         // Seite für Gäste: im Bearbeiten-Modus bzw. mit gemerkten Änderungen (POST fluid_demo) unter einer Transaktion rendern
         if ('' === Request::get(Api::PARAM, 'string')) {
-            Extension::register('ART_INIT', static function (ExtensionPoint $ep): void {
+            Extension::register(ArticleContentRendering::class, static function (ArticleContentRendering $ep): void {
                 $article = Article::getCurrent();
                 $ops = self::ops();
                 if (!self::active() || !$article || self::$running || (!Editing::requested() && !$ops) || !($user = Editing::user()) || !Editing::isGuest()) {
@@ -202,7 +200,7 @@ final class Demo
                 if (Gate::limited('api')) {
                     return;   // zu viele Anfragen: Seite ohne Änderungen
                 }
-                $content = Type::instanceOf($ep->subject, ArticleContent::class);
+                $content = $ep->content;
                 $content->eval = true;   // aus der Datenbank (Transaktion), nicht aus dem Cache
                 $content->sliceRevision = ArticleRevision::LIVE;
                 Sql::factory()->beginTransaction();
@@ -342,29 +340,29 @@ final class Demo
     private static function prepare(Article $article): void
     {
         $sql = Sql::factory();
-        $rows = $sql->getArray('SELECT id, module, value1, value2, status, ctype_id FROM rex_article_slice WHERE article_id = ? AND language_id = ? AND revision = ? ORDER BY ctype_id, priority',
+        $rows = $sql->getArray('SELECT id, module, data, status, content_section_id FROM rex_article_slice WHERE article_id = ? AND language_id = ? AND revision = ? ORDER BY content_section_id, priority',
             [$article->id, $article->languageId, ArticleRevision::LIVE]);
         $layoutOn = true;
-        $ctype = null;
+        $section = null;
         foreach ($rows as $r) {
-            if ($ctype !== $r['ctype_id']) {
-                [$ctype, $layoutOn] = [$r['ctype_id'], true];
+            if ($section !== $r['content_section_id']) {
+                [$section, $layoutOn] = [$r['content_section_id'], true];
             }
-            $m = Module::get((string) $r['module']);
+            $m = BlockModule::classFor((string) $r['module']);
             $on = 1 === (int) $r['status'];
-            $col = (int) (BlockModule::decode((string) $r['value2'])['col'] ?? 0);
+            ['values' => $data, 'tunes' => $tunes] = BlockModule::stored($r['data']);
+            $col = (int) ($tunes['col'] ?? 0);
             if (0 === $col) {
-                $layoutOn = !$m instanceof LayoutBlock || $on;
+                $layoutOn = null === $m || !is_a($m, LayoutBlock::class, true) || $on;
             }
             if (!$on || ($col > 0 && !$layoutOn)) {
                 Sql::factory()->setQuery('DELETE FROM rex_article_slice WHERE id = ?', [(int) $r['id']]);
                 continue;
             }
-            if ($m instanceof BlockModule) {
-                $data = BlockModule::decode((string) $r['value1']);
-                $masked = self::mask($m->fields(), $data);
+            if (null !== $m) {
+                $masked = self::mask($m::fields(), $data);
                 if ($masked !== $data) {
-                    Sql::factory()->setQuery('UPDATE rex_article_slice SET value1 = ? WHERE id = ?', [json_encode($masked, JSON_UNESCAPED_UNICODE), (int) $r['id']]);
+                    Sql::factory()->setQuery('UPDATE rex_article_slice SET data = ? WHERE id = ?', [BlockModule::encodeStore($masked, $tunes), (int) $r['id']]);
                 }
             }
         }
