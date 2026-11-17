@@ -1,13 +1,13 @@
 # fluid_demo – Ergänzung für fluid
 
-**fluid_demo ist eine Ergänzung für das REDAXO-6-AddOn [fluid](https://github.com/FriendsOfREDAXO/fluid)** und läuft
+**fluid_demo ist eine Ergänzung für das REDAXO-6-AddOn [fluid](https://github.com/KLXM/fluid)** und läuft
 nur zusammen mit fluid. Es macht aus einer fluid-Website eine Demo zum Ausprobieren: Besucher bearbeiten die Seiten
 ohne Anmeldung, und nichts davon wird gespeichert. Gedacht für Vorführungen, Schulungen und öffentliche Demo-Websites.
 
 fluid selbst bringt keine Demo mit und öffnet ohne diese Ergänzung keinen Gastzugang. Wer die Demo nicht braucht,
 installiert fluid_demo einfach nicht.
 
-**Voraussetzungen:** REDAXO 6 (`redaxo/core` 6.x), [fluid](https://github.com/FriendsOfREDAXO/fluid) 1.x, PHP 8.5.
+**Voraussetzungen:** REDAXO 6 (`redaxo/core` 6.x), [fluid](https://github.com/KLXM/fluid) 1.x, PHP 8.5.
 
 > REDAXO 6 und fluid sind noch in Entwicklung. Es kann sich noch einiges ändern.
 
@@ -28,7 +28,7 @@ Website-Einstellungen, Medienpool und Linkmap, Bildeditor, Seitenbaum, Verlauf, 
 
 ## Einrichten
 
-1. Installieren, zum Beispiel über Composer: `composer require friendsofredaxo/fluid_demo`. Danach `php bin/console migrate`.
+1. Installieren, zum Beispiel über Composer: `composer require klxm/fluid_demo`. Danach `php bin/console migrate`.
 2. Im Backend unter **Benutzer** einen Benutzer **ohne Admin-Rechte** anlegen, z. B. „demo-besuch“, mit einer Rolle,
    die die gewünschten Kategorien und Blöcke erlaubt. Optionen wie „Blöcke verschieben“ und „online/offline“ schalten
    die passenden Knöpfe frei. Das Passwort wird nie gebraucht.
@@ -42,7 +42,7 @@ Website-Einstellungen, Medienpool und Linkmap, Bildeditor, Seitenbaum, Verlauf, 
 **Ganz entfernen:**
 1. Zuerst die Demo ausschalten. Die Einstellungen im Reiter **Demo** gehören zu fluid und bleiben erhalten. So startet
    die Demo nicht von selbst wieder, falls das AddOn später erneut installiert wird.
-2. `composer remove friendsofredaxo/fluid_demo`
+2. `composer remove klxm/fluid_demo`
 3. `php bin/console migrate:cleanup` entfernt Schlüssel und Cache des AddOns.
 
 Wer im Backend angemeldet ist, sieht keinen Demo-Knopf und arbeitet ganz normal.
@@ -76,7 +76,7 @@ Besucher sieht, und die Begrenzungen bremsen ihn.
 ## Für Entwickler
 
 Das AddOn nutzt den Gastzugang von fluid (`FLUID_GUEST_USER`, `FLUID_API_ACTION`, `FLUID_EDITOR_CONFIG`, siehe
-[Entwickler-Referenz von fluid](https://github.com/FriendsOfREDAXO/fluid/blob/main/docs/entwickler.md#gastzugang-für-addons)).
+[Entwickler-Referenz von fluid](https://github.com/KLXM/fluid/blob/main/docs/entwickler.md#gastzugang-für-addons)).
 
 | Datei | Aufgabe |
 |---|---|
@@ -86,7 +86,7 @@ Das AddOn nutzt den Gastzugang von fluid (`FLUID_GUEST_USER`, `FLUID_API_ACTION`
 | `assets/demo.js` | im Editor: Aktionen merken und mitschicken, Seite mit Änderungen laden, Zurücksetzen, Beenden |
 
 Eigene Listener auf `ART_CONTENT_UPDATED` usw. laufen in der Demo mit. Wer Dateien schreibt oder externe Dienste
-aufruft, prüft `\FriendsOfRedaxo\Fluid\Editing::isGuest()` und tut dann nichts.
+aufruft, prüft `\Klxm\Fluid\Editing::isGuest()` und tut dann nichts.
 
 ## Lizenz
 

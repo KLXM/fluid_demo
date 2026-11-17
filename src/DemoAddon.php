@@ -1,6 +1,6 @@
 <?php
 
-namespace FriendsOfRedaxo\FluidDemo;
+namespace Klxm\FluidDemo;
 
 use Override;
 use Redaxo\Core\Addon\Addon;

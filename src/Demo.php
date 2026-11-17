@@ -1,16 +1,16 @@
 <?php
 
-namespace FriendsOfRedaxo\FluidDemo;
+namespace Klxm\FluidDemo;
 
-use FriendsOfRedaxo\Fluid\Api;
-use FriendsOfRedaxo\Fluid\ApiError;
-use FriendsOfRedaxo\Fluid\BlockModule;
-use FriendsOfRedaxo\Fluid\Editing;
-use FriendsOfRedaxo\Fluid\Kit;
-use FriendsOfRedaxo\Fluid\FluidAddon;
-use FriendsOfRedaxo\Fluid\LayoutBlock;
-use FriendsOfRedaxo\Fluid\Search\Search;
-use FriendsOfRedaxo\Fluid\Settings;
+use Klxm\Fluid\Api;
+use Klxm\Fluid\ApiError;
+use Klxm\Fluid\BlockModule;
+use Klxm\Fluid\Editing;
+use Klxm\Fluid\Kit;
+use Klxm\Fluid\FluidAddon;
+use Klxm\Fluid\LayoutBlock;
+use Klxm\Fluid\Search\Search;
+use Klxm\Fluid\Settings;
 use Redaxo\Core\Content\Article;
 use Redaxo\Core\Content\ArticleCache;
 use Redaxo\Core\Content\ArticleRevision;
@@ -276,7 +276,7 @@ final class Demo
 
     private static function gateUrl(): string
     {
-        return \FriendsOfRedaxo\Fluid\Routing\Router::base() . '/?' . Gate::PARAM . '=';
+        return \Klxm\Fluid\Routing\Router::base() . '/?' . Gate::PARAM . '=';
     }
 
     /**
