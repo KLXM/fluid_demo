@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0 – in Arbeit
+## 1.0.0-beta.1 – 2026-11-18
 
 - Demo für fluid als eigenes AddOn:
   - Besucher starten die Demo per Knopf nach einer Bot-Prüfung ohne Dienste Dritter (Rechenaufgabe, unsichtbares

@@ -28,7 +28,7 @@ Website-Einstellungen, Medienpool und Linkmap, Bildeditor, Seitenbaum, Verlauf, 
 
 ## Einrichten
 
-1. Installieren, zum Beispiel über Composer: `composer require klxm/fluid_demo`. Danach `php bin/console migrate`.
+1. Installieren, zum Beispiel über Composer: `composer require klxm/fluid_demo:^1.0@beta`. Danach `php bin/console migrate`.
 2. Im Backend unter **Benutzer** einen Benutzer **ohne Admin-Rechte** anlegen, z. B. „demo-besuch“, mit einer Rolle,
    die die gewünschten Kategorien und Blöcke erlaubt. Optionen wie „Blöcke verschieben“ und „online/offline“ schalten
    die passenden Knöpfe frei. Das Passwort wird nie gebraucht.
