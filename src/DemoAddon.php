@@ -15,6 +15,7 @@ final class DemoAddon extends Addon
     public function boot(): void
     {
         Demo::boot();
+        FluidVersion::boot();
     }
 
     /** Cache-Kennung einer Datei in assets/ */
