@@ -130,6 +130,15 @@
       const fresh = doc.querySelector('main');
       const current = document.querySelector('main');
       if (fresh && current) current.replaceWith(document.adoptNode(fresh));
+      // Klassen aus InlineStyle (Fokuspunkt, Bild an dieser Stelle …) stehen im Kopf der neuen Seite – Regeln übernehmen
+      const nonce = document.querySelector('style[nonce], script[nonce]')?.nonce || '';
+      doc.querySelectorAll('head style').forEach((s) => {
+        if (!s.textContent.includes('.fs-')) return;
+        const st = document.createElement('style');
+        if (nonce) st.nonce = nonce;
+        st.textContent = s.textContent;
+        document.head.append(st);
+      });
       const freshCfg = doc.getElementById('blocks-editor-config');
       if (freshCfg && cfgEl) cfgEl.textContent = freshCfg.textContent;
       document.querySelectorAll('main [data-block]').forEach((block) => document.dispatchEvent(new CustomEvent('fluid:rendered', { detail: { block } })));
