@@ -62,7 +62,7 @@ final class Demo
     public const array WRITES = ['save', 'add', 'move', 'reorder', 'col_move', 'paste', 'duplicate', 'status', 'delete',
         'page_save', 'shortlink_add', 'shortlink_delete'];
     /** Nur lesende Aktionen (ohne Verlauf, Entwürfe, Aktivität, Seitenbaum – dort stünden Namen der Redaktion und Offline-Seiten) */
-    public const array READS = ['form', 'preview', 'render', 'copy', 'design', 'page'];   // design: nur Vorschau, Speichern (design_save) bleibt gesperrt
+    public const array READS = ['form', 'preview', 'render', 'copy', 'design', 'page', 'seo_advice'];   // design: nur Vorschau, Speichern (design_save) bleibt gesperrt
 
     /** Cookie mit dem Kit, das ein Besucher in der Demo ausprobiert */
     public const string KIT_COOKIE = 'fluid_demo_kit';
