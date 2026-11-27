@@ -23,8 +23,10 @@ use Redaxo\Core\ExtensionPoint\Extension;
 use Redaxo\Core\ExtensionPoint\ExtensionLevel;
 use Redaxo\Core\ExtensionPoint\ExtensionPoint;
 use Redaxo\Core\Http\Request;
+use Redaxo\Core\Language\Language;
 use Redaxo\Core\Security\BackendLogin;
 use Redaxo\Core\Security\User;
+use Redaxo\Core\Translation\I18n;
 use Throwable;
 
 use function array_key_exists;
@@ -32,10 +34,15 @@ use function array_slice;
 use function count;
 use function in_array;
 use function is_array;
+use function is_file;
 use function is_scalar;
+use function preg_match_all;
+use function str_starts_with;
 use function strlen;
 
 use const ENT_QUOTES;
+use const JSON_UNESCAPED_SLASHES;
+use const JSON_UNESCAPED_UNICODE;
 use const PREG_OFFSET_CAPTURE;
 
 /**
@@ -99,7 +106,7 @@ final class Demo
     /** Auswahl für die Einstellung „Demo-Benutzer“: aktive Benutzer ohne Admin-Rechte */
     public static function userOptions(): array
     {
-        $out = ['' => '– bitte wählen –'];
+        $out = ['' => I18n::rawMsg('fluid_demo_settings_choose')];
         foreach (Sql::factory()->getArray('SELECT login, name FROM rex_user WHERE admin = 0 AND status = 1 ORDER BY name, login') as $u) {
             $out[(string) $u['login']] = trim((string) $u['name']) ?: (string) $u['login'];
         }
@@ -111,18 +118,18 @@ final class Demo
     {
         // Einstellungen in fluid (Website → Demo, nur Admins)
         Extension::register('FLUID_SETTINGS_SCHEMA', static function (ExtensionPoint $ep): array {
-            return (array) $ep->subject + ['demo' => ['label' => 'Demo', 'fields' => [
-                ['name' => 'demo', 'label' => 'Demo einschalten', 'type' => 'bool', 'default' => false,
-                    'help' => 'Besucher sehen den Knopf „Demo starten“. Nach einer kurzen, unsichtbaren Prüfung (kein Bot) können sie die Seiten bearbeiten und alles ausprobieren. Gespeichert wird nichts: Die Änderungen bleiben nur im Browser.'],
-                ['name' => 'demo_user', 'label' => 'Rechte wie Benutzer', 'type' => 'select', 'options' => self::userOptions(),
-                    'help' => 'Welche Blöcke Besucher nutzen dürfen, richtet sich nach diesem Benutzer (nur Benutzer ohne Admin-Rechte). Ohne Auswahl bleibt die Demo aus.'],
-                ['name' => 'demo_button', 'label' => 'Beschriftung des Knopfs', 'type' => 'text', 'max' => 40, 'placeholder' => 'Demo starten'],
-                ['name' => 'demo_text', 'label' => 'Hinweis in der Leiste (optional)', 'type' => 'text', 'max' => 160, 'placeholder' => 'Probieren Sie alles aus – Ihre Änderungen bleiben nur in diesem Browser.'],
-                ['name' => 'demo_banner', 'label' => 'Hinweis „Demo-Website“ für alle Besucher zeigen', 'type' => 'bool', 'default' => false,
-                    'help' => 'Ein schmaler Streifen ganz oben auf jeder Seite – z. B. damit niemand die Demo für eine offizielle Website hält.'],
-                ['name' => 'demo_banner_text', 'label' => 'Text des Hinweises', 'type' => 'text', 'max' => 200, 'placeholder' => 'Demo-Website für fluid – keine offizielle Website.'],
-                ['name' => 'demo_operator', 'label' => 'Betrieben von (Name)', 'type' => 'text', 'max' => 80, 'width' => 'half', 'placeholder' => 'z. B. Agentur Muster'],
-                ['name' => 'demo_operator_url', 'label' => 'Betrieben von (Adresse)', 'type' => 'text', 'max' => 200, 'width' => 'half', 'placeholder' => 'https://…'],
+            return (array) $ep->subject + ['demo' => ['label' => I18n::rawMsg('fluid_demo_settings_tab'), 'fields' => [
+                ['name' => 'demo', 'label' => I18n::rawMsg('fluid_demo_settings_enable'), 'type' => 'bool', 'default' => false,
+                    'help' => I18n::rawMsg('fluid_demo_settings_enable_help')],
+                ['name' => 'demo_user', 'label' => I18n::rawMsg('fluid_demo_settings_user'), 'type' => 'select', 'options' => self::userOptions(),
+                    'help' => I18n::rawMsg('fluid_demo_settings_user_help')],
+                ['name' => 'demo_button', 'label' => I18n::rawMsg('fluid_demo_settings_button'), 'type' => 'text', 'max' => 40, 'placeholder' => I18n::rawMsg('fluid_demo_start')],
+                ['name' => 'demo_text', 'label' => I18n::rawMsg('fluid_demo_settings_text'), 'type' => 'text', 'max' => 160, 'placeholder' => I18n::rawMsg('fluid_demo_notice_text')],
+                ['name' => 'demo_banner', 'label' => I18n::rawMsg('fluid_demo_settings_banner'), 'type' => 'bool', 'default' => false,
+                    'help' => I18n::rawMsg('fluid_demo_settings_banner_help')],
+                ['name' => 'demo_banner_text', 'label' => I18n::rawMsg('fluid_demo_settings_banner_text'), 'type' => 'text', 'max' => 200, 'placeholder' => I18n::rawMsg('fluid_demo_banner_text')],
+                ['name' => 'demo_operator', 'label' => I18n::rawMsg('fluid_demo_settings_operator'), 'type' => 'text', 'max' => 80, 'width' => 'half', 'placeholder' => I18n::rawMsg('fluid_demo_settings_operator_placeholder')],
+                ['name' => 'demo_operator_url', 'label' => I18n::rawMsg('fluid_demo_settings_operator_url'), 'type' => 'text', 'max' => 200, 'width' => 'half', 'placeholder' => 'https://…'],
             ]]];
         });
 
@@ -161,7 +168,7 @@ final class Demo
                 return $ep->subject;
             }
             if (Gate::limited('api')) {
-                throw new ApiError('Zu viele Aktionen in kurzer Zeit – bitte einen Moment warten.', 429);
+                throw new ApiError(self::t('too_many_actions'), 429);
             }
             [$result, $state] = self::run($ep->getParam('article'), $ep->getParam('user'), (string) $ep->getParam('action'), $ep->getParam('run'), $ep->getParam('state'));
 
@@ -180,11 +187,11 @@ final class Demo
             // mehrere Kits: Knopf „Kit: …“ schaltet zum nächsten (Cookie, nur dieser Browser)
             $kits = Kit::options();
             $kit = Kit::active()->key();
-            $kitButton = count($kits) > 1 ? [['label' => 'Kit: ' . ($kits[$kit] ?? $kit), 'event' => 'fluid-demo:kit']] : [];
-            $cfg['notice'] = ['tag' => 'Demo', 'text' => (string) Settings::get('demo_text', '') ?: 'Probieren Sie alles aus – Ihre Änderungen bleiben nur in diesem Browser.',
-                'buttons' => [...$kitButton, ['label' => 'Zurücksetzen', 'event' => 'fluid-demo:reset', 'hidden' => true], ['label' => 'Demo beenden', 'event' => 'fluid-demo:end']]];
+            $kitButton = count($kits) > 1 ? [['label' => self::t('kit_button', $kits[$kit] ?? $kit), 'event' => 'fluid-demo:kit']] : [];
+            $cfg['notice'] = ['tag' => self::t('notice_tag'), 'text' => (string) Settings::get('demo_text', '') ?: self::t('notice_text'),
+                'buttons' => [...$kitButton, ['label' => self::t('reset'), 'event' => 'fluid-demo:reset', 'hidden' => true], ['label' => self::t('end'), 'event' => 'fluid-demo:end']]];
             $cfg['demo'] = ['key' => 'fluid-demo:' . $article->id . ':' . $article->languageId, 'gate' => self::gateUrl(), 'maxOps' => self::MAX_OPS,
-                'kit' => $kit, 'kits' => array_keys($kits), 'kitCookie' => self::KIT_COOKIE];
+                'kit' => $kit, 'kits' => array_keys($kits), 'kitCookie' => self::KIT_COOKIE, 'texts' => self::scriptTexts()];
             $cfg['scripts'] = [...(array) ($cfg['scripts'] ?? []), $addon->getAssetsUrl('demo.js') . '?v=' . DemoAddon::version('demo.js')];
             // page settings (addresses, SEO, shortlinks): the demo replays them safely, so the role decides (fluid keeps them off for guests)
             $user = self::user();
@@ -261,9 +268,10 @@ final class Demo
                 return $html;
             }
             $addon = DemoAddon::instance();
-            $label = (string) Settings::get('demo_button', '') ?: 'Demo starten';
+            $label = (string) Settings::get('demo_button', '') ?: self::t('start');
             $tag = '<script src="' . htmlspecialchars($addon->getAssetsUrl('demo-start.js') . '?v=' . DemoAddon::version('demo-start.js')) . '" defer'
-                . ' data-gate="' . htmlspecialchars(self::gateUrl()) . '" data-label="' . htmlspecialchars($label) . '"></script>';
+                . ' data-gate="' . htmlspecialchars(self::gateUrl()) . '" data-label="' . htmlspecialchars($label)
+                . '" data-texts="' . htmlspecialchars((string) json_encode(self::scriptTexts(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)) . '"></script>';
             $pos = strripos($html, '</body>');
 
             return substr($html, 0, $pos) . $tag . substr($html, $pos);
@@ -274,24 +282,71 @@ final class Demo
     public static function banner(): string
     {
         $e = static fn (string $v) => htmlspecialchars($v, ENT_QUOTES);
-        $text = trim((string) Settings::get('demo_banner_text', '')) ?: 'Demo-Website für fluid – keine offizielle Website.';
+        $text = trim((string) Settings::get('demo_banner_text', '')) ?: self::t('banner_text');
         $name = trim((string) Settings::get('demo_operator', ''));
         $url = trim((string) Settings::get('demo_operator_url', ''));
-        $by = '' === $name ? '' : ' <span class="fdb__by">Betrieben von ' . (preg_match('~^https?://~', $url) ? '<a href="' . $e($url) . '" rel="noopener">' . $e($name) . '</a>' : $e($name)) . '</span>';
+        $by = '' === $name ? '' : ' <span class="fdb__by">' . self::t('banner_by', preg_match('~^https?://~', $url) ? '<a href="' . $e($url) . '" rel="noopener">' . $e($name) . '</a>' : $e($name)) . '</span>';
 
         return '<style>.fdb{position:relative;z-index:50;padding:.5rem 1rem;background:#fff4d6;color:#3d2e00;border-bottom:1px solid #e9cf86;font:500 .875rem/1.45 system-ui,sans-serif;text-align:center}'
             . '.fdb strong{color:inherit}.fdb a{color:#3d2e00;font-weight:700;text-decoration:underline;text-underline-offset:.15em}.fdb a:focus-visible{outline:2px solid #3d2e00;outline-offset:2px}.fdb__by{white-space:nowrap}'
             . '@media (prefers-color-scheme:dark){.fdb{background:#3d2e00;color:#fff4d6;border-color:#6b5310}.fdb a{color:#fff4d6}.fdb a:focus-visible{outline-color:#fff4d6}}'
             . '.fdb__start{display:inline-flex;align-items:center;gap:.4rem;min-height:2rem;margin:.15rem 0 .15rem .75rem;padding:0 .9rem;border:0;border-radius:999px;background:#1d2230;color:#fff;font:700 .875rem/1 system-ui,sans-serif;cursor:pointer;vertical-align:middle}'
             . '.fdb__start:hover{background:#2b3245}.fdb__start:focus-visible{outline:3px solid #8a96ff;outline-offset:2px}.fdb__start[hidden]{display:none}</style>'
-            . '<div class="fdb" role="note"><strong>Demo:</strong> ' . $e($text) . $by
+            . '<div class="fdb" role="note"><strong>' . $e(self::t('banner_label')) . '</strong> ' . $e($text) . $by
             // Knopf zum Start (demo-start.js blendet ihn ein, wenn die Demo startbar ist – ohne JavaScript bleibt er verborgen)
-            . '<button type="button" class="fdb__start" data-fluid-demo-start hidden>' . $e((string) Settings::get('demo_button', '') ?: 'Demo starten') . ' →</button></div>';
+            . '<button type="button" class="fdb__start" data-fluid-demo-start hidden>' . $e((string) Settings::get('demo_button', '') ?: self::t('start')) . ' →</button></div>';
     }
 
     private static function gateUrl(): string
     {
-        return Router::base() . '/?' . Gate::PARAM . '=';
+        // mit der Sprache der Seite, damit der Einlass in ihr antwortet (Gate::handle läuft, bevor fluid die Sprache setzt)
+        return Router::base() . '/?' . Gate::LANG . '=' . rawurlencode(self::locale()) . '&' . Gate::PARAM . '=';
+    }
+
+    /**
+     * Sprache der Texte für Besucher: die Sprache der Seite (Einlass: Parameter fluid_demo_lang), nicht die Backend-Sprache
+     * eines angemeldeten Redakteurs.
+     */
+    public static function locale(): string
+    {
+        $locales = I18n::getLocales();
+        $want = Request::get(Gate::LANG, 'string', '');
+        if ('' !== $want && in_array($want, $locales, true)) {
+            return $want;
+        }
+        $code = (string) (Language::getCurrent()->code ?? '');
+        foreach ($locales as $l) {
+            if ('' !== $code && str_starts_with($l, $code . '_')) {
+                return $l;
+            }
+        }
+
+        return I18n::getLocale();
+    }
+
+    /** Text für Besucher (Schlüssel fluid_demo_* ohne Präfix) in der Sprache der Seite, nicht maskiert */
+    public static function t(string $key, string|int ...$args): string
+    {
+        return I18n::rawMsgInLocale('fluid_demo_' . $key, self::locale(), ...$args);
+    }
+
+    /**
+     * Texte der Skripte (demo-start.js, demo.js) in der Sprache der Seite: Schlüssel fluid_demo_js_* ohne Präfix.
+     *
+     * @return array<string, string>
+     */
+    public static function scriptTexts(): array
+    {
+        $file = DemoAddon::instance()->getPath('lang/de_de.lang');
+        if (!is_file($file) || !preg_match_all('~^fluid_demo_js_([a-z0-9_]+)\s*=~m', (string) file_get_contents($file), $m)) {
+            return [];
+        }
+        $out = [];
+        foreach ($m[1] as $key) {
+            $out[$key] = self::t('js_' . $key);
+        }
+
+        return $out;
     }
 
     /**
@@ -305,10 +360,10 @@ final class Demo
     public static function run(Article $article, User $user, string $name, callable $action, callable $state): array
     {
         if ('publish' === $name) {
-            return [['message' => 'Demo: Auf einer echten Website wäre die Seite jetzt veröffentlicht. Hier bleibt alles nur in Ihrem Browser.', 'demo' => 'publish'], ['draft' => true, 'workVersion' => true]];
+            return [['message' => self::t('publish_note'), 'demo' => 'publish'], ['draft' => true, 'workVersion' => true]];
         }
         if (!in_array($name, self::WRITES, true) && !in_array($name, self::READS, true)) {
-            throw new ApiError('In der Demo nicht verfügbar.', 403);
+            throw new ApiError(self::t('not_available'), 403);
         }
         $sql = Sql::factory();
         $sql->beginTransaction();
@@ -353,8 +408,8 @@ final class Demo
     private static function explain(string $name, array $result): array
     {
         return match ($name) {
-            'page_save' => ['url' => null, 'reload' => true, 'message' => 'Demo: Gespeichert – Adresse, Kurzlinks und SEO-Angaben sehen Sie in den Seiteneinstellungen und in den Links. Titel und Online-Status bleiben in der Demo unverändert.'] + $result,
-            'shortlink_add' => ['message' => 'Demo: Kurzlink angelegt – zur Ansicht. Auf einer echten Website führt er sofort hierher.'] + $result,
+            'page_save' => ['url' => null, 'reload' => true, 'message' => self::t('page_saved')] + $result,
+            'shortlink_add' => ['message' => self::t('shortlink_added')] + $result,
             default => $result,
         };
     }

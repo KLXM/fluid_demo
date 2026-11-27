@@ -12,7 +12,11 @@
   const me = document.currentScript;
   const gate = me?.dataset.gate;
   if (!gate || !window.fetch || !window.HTMLDialogElement) return;
-  const label = me.dataset.label || 'Demo starten';
+  // Texte in der Sprache der Seite (Demo::scriptTexts, Schlüssel fluid_demo_js_*); deutscher Text als Ersatz
+  let texts = {};
+  try { texts = JSON.parse(me.dataset.texts || '{}') || {}; } catch { texts = {}; }
+  const t = (key, de) => texts[key] || de;
+  const label = me.dataset.label || t('start', 'Demo starten');
 
   // ------------------------------------------------------------------ SHA-256 für einen Block (Nachricht < 56 Bytes)
   const K = new Uint32Array([
@@ -97,33 +101,33 @@
     <button type="button" class="fab" aria-haspopup="dialog"><span class="dot" aria-hidden="true"></span>${esc(label)}</button>
     <dialog aria-labelledby="fd-title" aria-describedby="fd-text">
       <form method="dialog">
-        <h2 id="fd-title">Website selbst bearbeiten</h2>
+        <h2 id="fd-title">${esc(t('title', 'Website selbst bearbeiten'))}</h2>
         <div id="fd-text">
-          <p>Probieren Sie aus, wie Redakteure mit fluid arbeiten: Texte direkt auf der Seite ändern, Blöcke einfügen, verschieben und löschen.</p>
-          <ul><li>Gespeichert wird nichts – Ihre Änderungen bleiben nur in diesem Browser.</li>
-          <li>Vor dem Start prüft Ihr Browser kurz, dass hier kein Bot klickt. Dafür werden keine Daten an Dritte gesendet.</li></ul>
+          <p>${esc(t('intro', 'Probieren Sie aus, wie Redakteure mit fluid arbeiten: Texte direkt auf der Seite ändern, Blöcke einfügen, verschieben und löschen.'))}</p>
+          <ul><li>${esc(t('nothing_saved', 'Gespeichert wird nichts – Ihre Änderungen bleiben nur in diesem Browser.'))}</li>
+          <li>${esc(t('bot_check', 'Vor dem Start prüft Ihr Browser kurz, dass hier kein Bot klickt. Dafür werden keine Daten an Dritte gesendet.'))}</li></ul>
         </div>
         <label class="hp" aria-hidden="true">Website <input type="text" name="website" tabindex="-1" autocomplete="off"></label>
         <p class="status" role="status" aria-live="polite"></p>
         <div class="row">
-          <button type="submit" class="btn" value="cancel" formnovalidate>Abbrechen</button>
+          <button type="submit" class="btn" value="cancel" formnovalidate>${esc(t('cancel', 'Abbrechen'))}</button>
           <button type="button" class="btn btn--primary" data-go>${esc(label)}</button>
         </div>
       </form>
     </dialog>`;
   const fab = root.querySelector('.fab'), dlg = root.querySelector('dialog'), go = root.querySelector('[data-go]'), status = root.querySelector('.status');
   let opened = 0;
-  const say = (t, err = false) => { status.textContent = t; status.classList.toggle('is-error', err); };
+  const say = (msg, err = false) => { status.textContent = msg; status.classList.toggle('is-error', err); };
   const open = () => { opened = Date.now(); say(''); go.disabled = false; dlg.showModal(); go.focus(); };
   fab.addEventListener('click', open);
   // weitere Startknöpfe auf der Seite (z. B. im Hinweis-Streifen oben): sichtbar machen und verbinden
   const others = () => document.querySelectorAll('[data-fluid-demo-start]').forEach((b) => { if (b._fd) return; b._fd = true; b.hidden = false; b.addEventListener('click', open); });
   go.addEventListener('click', async () => {
     go.disabled = true;
-    say('Einen Moment – Ihr Browser prüft …');
+    say(t('checking', 'Einen Moment – Ihr Browser prüft …'));
     try {
       const ch = await (await fetch(gate + 'challenge', { credentials: 'same-origin', headers: { Accept: 'application/json' } })).json();
-      if (!ch.ok) throw new Error(ch.error || 'Die Demo ist gerade nicht verfügbar.');
+      if (!ch.ok) throw new Error(ch.error || t('unavailable', 'Die Demo ist gerade nicht verfügbar.'));
       const nonce = await solve(ch.salt, ch.difficulty);
       const fd = new FormData();
       for (const k of ['salt', 'exp', 'difficulty', 'sig']) fd.append(k, ch[k]);
@@ -134,13 +138,13 @@
       if (wait > 0) await new Promise((r) => setTimeout(r, wait));
       fd.append('t', String(Date.now() - opened));
       const res = await (await fetch(gate + 'start', { method: 'POST', body: fd, credentials: 'same-origin' })).json();
-      if (!res.ok) throw new Error(res.error || 'Die Prüfung hat nicht geklappt.');
-      say('Geschafft – die Demo startet …');
+      if (!res.ok) throw new Error(res.error || t('check_failed', 'Die Prüfung hat nicht geklappt.'));
+      say(t('starting', 'Geschafft – die Demo startet …'));
       const u = new URL(location.href);
       u.searchParams.set('fluid_edit', '1');
       location.href = u.href;
     } catch (e) {
-      say(e.message || 'Das hat nicht geklappt. Bitte noch einmal versuchen.', true);
+      say(e.message || t('error', 'Das hat nicht geklappt. Bitte noch einmal versuchen.'), true);
       go.disabled = false;
     }
   });

@@ -15,6 +15,9 @@
   try { cfg = JSON.parse(cfgEl?.textContent || 'null'); } catch { cfg = null; }
   if (!cfg?.demo) return;
 
+  // Texte in der Sprache der Seite (Demo::scriptTexts, Schlüssel fluid_demo_js_*); deutscher Text als Ersatz
+  const texts = cfg.demo.texts || {};
+  const t = (key, de) => texts[key] || de;
   const KEY = cfg.demo.key;
   const MAX = cfg.demo.maxOps || 60;
   const WRITES = new Set(['save', 'add', 'move', 'reorder', 'col_move', 'paste', 'duplicate', 'status', 'delete', 'page_save', 'shortlink_add', 'shortlink_delete']);
@@ -50,7 +53,7 @@
   });
 
   // Auswahl aus Medienpool/Linkmap gibt es in der Demo nicht (form.js zeigt diesen Hinweis)
-  window.fluidPickerOff = 'In der Demo lassen sich keine Bilder und Links aus dem Backend auswählen – auf einer echten Website öffnet sich hier der Medienpool bzw. die Seitenauswahl.';
+  window.fluidPickerOff = t('picker_off', 'In der Demo lassen sich keine Bilder und Links aus dem Backend auswählen – auf einer echten Website öffnet sich hier der Medienpool bzw. die Seitenauswahl.');
 
   // FormData → verschachteltes Objekt wie PHPs $_POST („f[1][titel]“ → {f: {1: {titel: …}}}, „a[]“ → Liste)
   function nest(fd) {
@@ -85,7 +88,7 @@
     const { action, fd, json } = e.detail;
     if (!WRITES.has(action)) return;
     if (ops.length >= MAX) {
-      document.dispatchEvent(new CustomEvent('fluid:notice', { detail: `Die Demo merkt sich höchstens ${MAX} Änderungen je Seite – „Zurücksetzen“ fängt neu an.` }));
+      document.dispatchEvent(new CustomEvent('fluid:notice', { detail: t('max_ops', 'Die Demo merkt sich höchstens {max} Änderungen je Seite – „Zurücksetzen“ fängt neu an.').replace('{max}', String(MAX)) }));
       return;
     }
     const p = nest(fd);
@@ -99,7 +102,7 @@
   // Hinweis-Leiste
   document.addEventListener('fluid-demo:reset', async () => {
     const ask = window.FluidEditor?.ask;
-    const ok = ask ? await ask({ title: 'Demo zurücksetzen?', body: 'Alle Ihre Änderungen an dieser Seite werden verworfen – sie waren ohnehin nur in diesem Browser gespeichert.', ok: 'Zurücksetzen', danger: true }) : true;
+    const ok = ask ? await ask({ title: t('reset_title', 'Demo zurücksetzen?'), body: t('reset_body', 'Alle Ihre Änderungen an dieser Seite werden verworfen – sie waren ohnehin nur in diesem Browser gespeichert.'), ok: t('reset_ok', 'Zurücksetzen'), danger: true }) : true;
     if (!ok) return;
     window.FluidEditor?.discard?.();
     ops = [];
@@ -108,7 +111,7 @@
   });
   document.addEventListener('fluid-demo:end', async () => {
     const ask = window.FluidEditor?.ask;
-    if (ask && !(await ask({ title: 'Demo beenden?', body: 'Ihre Änderungen werden verworfen, die Seite erscheint wieder wie für alle Besucher.', ok: 'Beenden' }))) return;
+    if (ask && !(await ask({ title: t('end_title', 'Demo beenden?'), body: t('end_body', 'Ihre Änderungen werden verworfen, die Seite erscheint wieder wie für alle Besucher.'), ok: t('end_ok', 'Beenden') }))) return;
     window.FluidEditor?.discard?.();
     try { Object.keys(localStorage).filter((k) => k.startsWith('fluid-demo:')).forEach((k) => localStorage.removeItem(k)); } catch { /* */ }
     setKitCookie('', 0);

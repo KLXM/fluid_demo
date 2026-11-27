@@ -18,6 +18,8 @@ use Redaxo\Core\Filesystem\Path;
 final class Gate
 {
     public const string PARAM = 'fluid_demo_gate';
+    /** Sprache der Seite für die Antworten (Demo::gateUrl) */
+    public const string LANG = 'fluid_demo_lang';
     public const string COOKIE = 'fluid_demo';
     public const int DIFFICULTY = 21;
     public const int SESSION = 7200;
@@ -77,13 +79,13 @@ final class Gate
     public static function handle(string $step): never
     {
         if (!Demo::enabled()) {
-            self::send(['ok' => false, 'error' => 'Die Demo ist ausgeschaltet.'], 404);
+            self::send(['ok' => false, 'error' => Demo::t('gate_off')], 404);
         }
         match ($step) {
             'challenge' => self::challenge(),
             'start' => self::start(),
             'end' => self::end(),
-            default => self::send(['ok' => false, 'error' => 'Unbekannt.'], 400),
+            default => self::send(['ok' => false, 'error' => 'Unknown step.'], 400),
         };
     }
 
@@ -105,7 +107,7 @@ final class Gate
         $exp = (int) ($in['exp'] ?? 0);
         $d = (int) ($in['difficulty'] ?? 0);
         $nonce = (string) ($in['nonce'] ?? '');
-        $fail = static fn () => self::send(['ok' => false, 'error' => 'Die Prüfung hat nicht geklappt. Bitte noch einmal versuchen.'], 403);
+        $fail = static fn () => self::send(['ok' => false, 'error' => Demo::t('gate_failed')], 403);
         if ('' !== trim((string) ($in['website'] ?? ''))                   // Honigtopf: Menschen sehen das Feld nicht
             || (int) ($in['t'] ?? 0) < self::MIN_MS                           // zu schnell für einen Menschen
             || !preg_match('~^[a-f0-9]{32}$~', $salt) || !ctype_digit($nonce) || \strlen($nonce) > 12
@@ -132,11 +134,11 @@ final class Gate
     private static function sameOrigin(): void
     {
         if ('POST' !== ($_SERVER['REQUEST_METHOD'] ?? '')) {
-            self::send(['ok' => false, 'error' => 'Nur POST.'], 405);
+            self::send(['ok' => false, 'error' => 'POST only.'], 405);
         }
         $origin = (string) ($_SERVER['HTTP_ORIGIN'] ?? '');
         if ('' !== $origin && parse_url($origin, PHP_URL_HOST) !== parse_url('//' . ($_SERVER['HTTP_HOST'] ?? ''), PHP_URL_HOST)) {
-            self::send(['ok' => false, 'error' => 'Nicht erlaubt.'], 403);
+            self::send(['ok' => false, 'error' => 'Not allowed.'], 403);
         }
     }
 
@@ -213,7 +215,7 @@ final class Gate
     {
         if (self::limited($what)) {
             header('Retry-After: 300');
-            self::send(['ok' => false, 'error' => 'Zu viele Versuche – bitte später noch einmal.'], 429);
+            self::send(['ok' => false, 'error' => Demo::t('gate_too_many')], 429);
         }
     }
 
