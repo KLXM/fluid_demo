@@ -7,8 +7,9 @@ use Klxm\Fluid\ApiError;
 use Klxm\Fluid\BlockModule;
 use Klxm\Fluid\Editing;
 use Klxm\Fluid\Kit;
-use Klxm\Fluid\FluidAddon;
 use Klxm\Fluid\LayoutBlock;
+use Klxm\Fluid\Routing\Router;
+use Klxm\Fluid\Routing\Routes;
 use Klxm\Fluid\Search\Search;
 use Klxm\Fluid\Settings;
 use Redaxo\Core\Content\Article;
@@ -26,10 +27,16 @@ use Redaxo\Core\Security\BackendLogin;
 use Redaxo\Core\Security\User;
 use Throwable;
 
+use function array_key_exists;
+use function array_slice;
+use function count;
 use function in_array;
 use function is_array;
 use function is_scalar;
 use function strlen;
+
+use const ENT_QUOTES;
+use const PREG_OFFSET_CAPTURE;
 
 /**
  * Demo für fluid: Besucher probieren das Bearbeiten auf der Website aus – ohne Anmeldung, ohne dass etwas gespeichert wird.
@@ -43,22 +50,25 @@ use function strlen;
  *    spielt die im Browser gemerkten Aktionen ab (localStorage, assets/demo.js), führt die aktuelle Aktion aus und rollt
  *    alles zurück. Gespeichert wird nie etwas. Neue Blöcke bekommen feste IDs (PIN_BASE + n), damit sie bei jedem
  *    Durchlauf gleich heißen.
- *  - Erlaubt sind nur Block-Aktionen dieser Seite (WRITES, READS); Veröffentlichen zeigt nur einen Hinweis. Alles andere
+ *  - Erlaubt sind nur Block-Aktionen, Seiteneinstellungen und Kurzlinks dieser Seite (WRITES, READS); Veröffentlichen
+ *    zeigt nur einen Hinweis. Das Routing läuft dabei ohne Cache-Dateien (Routes::volatile), Titel und Online-Status
+ *    bleiben unverändert (guard). Alles andere
  *    lehnt fluid für Gäste ohnehin ab (Api: Gäste nur über FLUID_API_ACTION).
  */
 final class Demo
 {
     public const string POST = 'fluid_demo';
     /** Aktionen, die der Browser sich merkt und bei jeder Anfrage wiederholen lässt */
-    public const array WRITES = ['save', 'add', 'move', 'reorder', 'col_move', 'paste', 'duplicate', 'status', 'delete'];
+    public const array WRITES = ['save', 'add', 'move', 'reorder', 'col_move', 'paste', 'duplicate', 'status', 'delete',
+        'page_save', 'shortlink_add', 'shortlink_delete'];
     /** Nur lesende Aktionen (ohne Verlauf, Entwürfe, Aktivität, Seitenbaum – dort stünden Namen der Redaktion und Offline-Seiten) */
-    public const array READS = ['form', 'preview', 'render', 'copy', 'design'];   // design: nur Vorschau, Speichern (design_save) bleibt gesperrt
-    private const int PIN_BASE = 1_900_000_000;
-    private const int MAX_OPS = 60;
-    private const int MAX_BYTES = 200_000;
+    public const array READS = ['form', 'preview', 'render', 'copy', 'design', 'page'];   // design: nur Vorschau, Speichern (design_save) bleibt gesperrt
 
     /** Cookie mit dem Kit, das ein Besucher in der Demo ausprobiert */
     public const string KIT_COOKIE = 'fluid_demo_kit';
+    private const int PIN_BASE = 1_900_000_000;
+    private const int MAX_OPS = 60;
+    private const int MAX_BYTES = 200_000;
 
     private static ?bool $active = null;
     private static bool $running = false;
@@ -170,13 +180,16 @@ final class Demo
             // mehrere Kits: Knopf „Kit: …“ schaltet zum nächsten (Cookie, nur dieser Browser)
             $kits = Kit::options();
             $kit = Kit::active()->key();
-            $kitButton = \count($kits) > 1 ? [['label' => 'Kit: ' . ($kits[$kit] ?? $kit), 'event' => 'fluid-demo:kit']] : [];
+            $kitButton = count($kits) > 1 ? [['label' => 'Kit: ' . ($kits[$kit] ?? $kit), 'event' => 'fluid-demo:kit']] : [];
             $cfg['notice'] = ['tag' => 'Demo', 'text' => (string) Settings::get('demo_text', '') ?: 'Probieren Sie alles aus – Ihre Änderungen bleiben nur in diesem Browser.',
                 'buttons' => [...$kitButton, ['label' => 'Zurücksetzen', 'event' => 'fluid-demo:reset', 'hidden' => true], ['label' => 'Demo beenden', 'event' => 'fluid-demo:end']]];
             $cfg['demo'] = ['key' => 'fluid-demo:' . $article->id . ':' . $article->languageId, 'gate' => self::gateUrl(), 'maxOps' => self::MAX_OPS,
                 'kit' => $kit, 'kits' => array_keys($kits), 'kitCookie' => self::KIT_COOKIE];
             $cfg['scripts'] = [...(array) ($cfg['scripts'] ?? []), $addon->getAssetsUrl('demo.js') . '?v=' . DemoAddon::version('demo.js')];
-            $cfg['can'] = ['publish' => true, 'version' => true] + (array) ($cfg['can'] ?? []);
+            // page settings (addresses, SEO, shortlinks): the demo replays them safely, so the role decides (fluid keeps them off for guests)
+            $user = self::user();
+            $cfg['can'] = ['publish' => true, 'version' => true,
+                'editArticle' => null !== $user && $user->hasPerm('editArticle[]'), 'editCategory' => null !== $user && $user->hasPerm('editCategory[]')] + (array) ($cfg['can'] ?? []);
 
             return $cfg;
         });
@@ -205,6 +218,7 @@ final class Demo
                 $content->sliceRevision = ArticleRevision::LIVE;
                 Sql::factory()->beginTransaction();
                 self::$running = true;
+                Routes::volatile(true);
                 self::prepare($article);
                 self::replay($article, $user, $ops);
                 $finish = static function () use ($article): void {
@@ -216,6 +230,7 @@ final class Demo
                     if ($sql->inTransaction()) {
                         $sql->rollBack();
                     }
+                    Routes::volatile(false);
                     self::resetCounter();
                     ArticleCache::delete($article->id, $article->languageId);
                 };
@@ -234,7 +249,7 @@ final class Demo
             if (!Settings::get('demo_banner', false) || !preg_match('~<body\b[^>]*>~i', $html, $m, PREG_OFFSET_CAPTURE)) {
                 return $html;
             }
-            $pos = $m[0][1] + \strlen($m[0][0]);
+            $pos = $m[0][1] + strlen($m[0][0]);
 
             return substr($html, 0, $pos) . self::banner() . substr($html, $pos);
         }, ExtensionLevel::Late);
@@ -276,7 +291,7 @@ final class Demo
 
     private static function gateUrl(): string
     {
-        return \Klxm\Fluid\Routing\Router::base() . '/?' . Gate::PARAM . '=';
+        return Router::base() . '/?' . Gate::PARAM . '=';
     }
 
     /**
@@ -298,19 +313,50 @@ final class Demo
         $sql = Sql::factory();
         $sql->beginTransaction();
         self::$running = true;
+        Routes::volatile(true);
         try {
             self::prepare($article);
             self::replay($article, $user, self::ops());
+            self::guard($name, $article);
             $result = $action();
             $st = $state();
         } finally {
             self::$running = false;
             $sql->rollBack();
+            Routes::volatile(false);
             self::resetCounter();
             ArticleCache::delete($article->id, $article->languageId);
         }
 
-        return [$result, $st];
+        return [self::explain($name, $result), $st];
+    }
+
+    /**
+     * Page settings in the demo: title and online status stay as they are – renaming would write navigation caches
+     * (files) outside the transaction. Addresses, SEO fields and shortlinks only touch the database.
+     */
+    private static function guard(string $name, Article $article): void
+    {
+        if ('page_save' === $name) {
+            $_POST['name'] = $article->name;
+            $_POST['online'] = $article->isOnline() ? '1' : '';
+        }
+    }
+
+    /**
+     * Results for guests: a changed address or a shortlink only exists while the demo replays this page – addresses
+     * themselves are resolved before that, so the editor stays on this page instead of opening the new address.
+     *
+     * @param array<string, mixed> $result
+     * @return array<string, mixed>
+     */
+    private static function explain(string $name, array $result): array
+    {
+        return match ($name) {
+            'page_save' => ['url' => null, 'reload' => true, 'message' => 'Demo: Gespeichert – Adresse, Kurzlinks und SEO-Angaben sehen Sie in den Seiteneinstellungen und in den Links. Titel und Online-Status bleiben in der Demo unverändert.'] + $result,
+            'shortlink_add' => ['message' => 'Demo: Kurzlink angelegt – zur Ansicht. Auf einer echten Website führt er sofort hierher.'] + $result,
+            default => $result,
+        };
     }
 
     /**
@@ -444,6 +490,7 @@ final class Demo
                 $_POST = $op['p'];
                 $_GET[Api::PARAM] = $op['a'];
                 try {
+                    self::guard($op['a'], $article);
                     Editing::render(static fn () => Api::dispatch($op['a'], $article, $user));
                 } catch (Throwable) {
                     // veraltete Aktion (z. B. Block gibt es nicht mehr): überspringen

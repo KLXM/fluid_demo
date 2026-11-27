@@ -1,5 +1,15 @@
 # Changelog
 
+## Unveröffentlicht
+
+- Besucher probieren die **Seiteneinstellungen** aus: Adresse (auch eigene Adresse und Ebene ausblenden), SEO-Angaben
+  und **Kurzlinks** – gemerkt und abgespielt wie die Blöcke, gespeichert wird nichts. Titel und Online-Status bleiben
+  unverändert. Voraussetzung: Die Rolle des Demo-Benutzers hat „Artikel bearbeiten“ bzw. „Kategorien bearbeiten“.
+- Das Routing läuft in der Demo ohne Cache-Dateien (`Routes::volatile()` aus fluid) – geänderte Adressen erreichen
+  nie andere Besucher.
+- Nach dem Abspielen bleiben API- und Ansichtsadressen des Editors auf der echten Adresse der Seite.
+- Bilder: Regeln aus InlineStyle beim Abspielen übernehmen (eee4379); `{fluid-version}` auf der Website (0e4aa47).
+
 ## 1.0.0-beta.1 – 2026-11-18
 
 - Demo für fluid als eigenes AddOn:

@@ -31,7 +31,8 @@ Website-Einstellungen, Medienpool und Linkmap, Bildeditor, Seitenbaum, Verlauf, 
 1. Installieren, zum Beispiel über Composer: `composer require klxm/fluid_demo:^1.0@beta`. Danach `php bin/console migrate`.
 2. Im Backend unter **Benutzer** einen Benutzer **ohne Admin-Rechte** anlegen, z. B. „demo-besuch“, mit einer Rolle,
    die die gewünschten Kategorien und Blöcke erlaubt. Optionen wie „Blöcke verschieben“ und „online/offline“ schalten
-   die passenden Knöpfe frei. Das Passwort wird nie gebraucht.
+   die passenden Knöpfe frei. Mit **„Artikel bearbeiten“** und **„Kategorien bearbeiten“** probieren Besucher auch die
+   Seiteneinstellungen aus: Adresse, SEO-Angaben und Kurzlinks. Das Passwort wird nie gebraucht.
 3. Auf der Website angemeldet: Menü ⋯ → **Website …** → Reiter **Demo**. Dort **„Demo einschalten“** anhaken und
    bei **„Rechte wie Benutzer“** den Benutzer wählen. Optional: Beschriftung des Knopfs und Hinweis in der Leiste.
 4. Für öffentliche Demo-Websites: **„Hinweis „Demo-Website“ für alle Besucher zeigen“** mit eigenem Text und
@@ -56,8 +57,12 @@ Wer im Backend angemeldet ist, sieht keinen Demo-Knopf und arbeitet ganz normal.
   - Offline-Blöcke und Spalten von Offline-Layouts sind entfernt.
   - Interne Einstellungen werden geleert, bevor Gäste etwas zu sehen bekommen: Empfänger, Betreff und
     Bestätigungstexte von Formularen, Platzhalter, Filterwerte, interne Feldnamen.
-- **Nur Block-Aktionen dieser Seite.** Alles andere lehnt fluid für Gäste ab. Der Demo-Benutzer hat nie
-  Admin-Rechte.
+- **Nur Aktionen dieser Seite:** Blöcke, Seiteneinstellungen und Kurzlinks. Alles andere lehnt fluid für Gäste ab.
+  Der Demo-Benutzer hat nie Admin-Rechte.
+  - Titel und Online-Status bleiben unverändert – Umbenennen schriebe Navigations-Caches als Dateien, außerhalb der
+    Transaktion.
+  - Das Routing läuft dabei ohne Cache-Dateien (`Routes::volatile()`), neue Adressen und Kurzlinks gibt es nur in der
+    Demo-Ansicht. Der Editor bleibt auf der echten Adresse der Seite.
 - **Einlass nur per Knopf mit Bot-Prüfung**, ohne Dienste Dritter und ohne Cookies Dritter:
   - Der Browser löst eine Rechenaufgabe (SHA-256 mit führenden Null-Bits). Die Aufgabe ist signiert und gilt fünf
     Minuten und nur einmal.

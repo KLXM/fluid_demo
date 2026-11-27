@@ -17,7 +17,7 @@
 
   const KEY = cfg.demo.key;
   const MAX = cfg.demo.maxOps || 60;
-  const WRITES = new Set(['save', 'add', 'move', 'reorder', 'col_move', 'paste', 'duplicate', 'status', 'delete']);
+  const WRITES = new Set(['save', 'add', 'move', 'reorder', 'col_move', 'paste', 'duplicate', 'status', 'delete', 'page_save', 'shortlink_add', 'shortlink_delete']);
   const load = () => {
     try { const v = JSON.parse(localStorage.getItem(KEY) || '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
   };
@@ -82,13 +82,16 @@
   // Anfragen des Editors: gemerkte Änderungen mitschicken, erfolgreiche schreibende Aktion merken
   document.addEventListener('fluid:api-request', (e) => e.detail.fd.append('fluid_demo', payload()));
   document.addEventListener('fluid:api-done', (e) => {
-    const { action, fd } = e.detail;
+    const { action, fd, json } = e.detail;
     if (!WRITES.has(action)) return;
     if (ops.length >= MAX) {
       document.dispatchEvent(new CustomEvent('fluid:notice', { detail: `Die Demo merkt sich höchstens ${MAX} Änderungen je Seite – „Zurücksetzen“ fängt neu an.` }));
       return;
     }
-    ops.push({ a: action, p: nest(fd) });
+    const p = nest(fd);
+    // a shortlink with a random code gets the same address on every replay
+    if (action === 'shortlink_add' && json?.wish) p.path = json.wish;
+    ops.push({ a: action, p });
     store();
     showReset();
   });
@@ -140,7 +143,18 @@
         document.head.append(st);
       });
       const freshCfg = doc.getElementById('blocks-editor-config');
-      if (freshCfg && cfgEl) cfgEl.textContent = freshCfg.textContent;
+      if (freshCfg && cfgEl) {
+        // the browser stays at the real address: a changed page address only exists while the demo replays,
+        // so requests keep going to the current URL
+        let next = null;
+        try { next = JSON.parse(freshCfg.textContent); } catch { next = null; }
+        if (next) {
+          ['api', 'editUrl', 'viewUrl', 'draftUrl'].forEach((k) => { if (k in cfg) next[k] = cfg[k]; });
+          cfgEl.textContent = JSON.stringify(next);
+        } else {
+          cfgEl.textContent = freshCfg.textContent;
+        }
+      }
       document.querySelectorAll('main [data-block]').forEach((block) => document.dispatchEvent(new CustomEvent('fluid:rendered', { detail: { block } })));
     } catch { /* dann ohne Änderungen */ } finally {
       root.classList.remove('fluid-demo-loading');
